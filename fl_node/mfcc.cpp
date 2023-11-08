@@ -55,7 +55,6 @@ typedef std::map<int,std::map<int,c_d> > twmap;
 class MFCC {
 
 private:
-    const double PI = 4*atan(1.0);   // Pi = 3.14...
     int fs;
     twmap twiddle;
     size_t winLengthSamples, frameShiftSamples, numCepstra, numFFT, numFFTBins, numFilters;
@@ -79,7 +78,7 @@ private:
         const c_d J(0,1);      // Imaginary number 'j'
         for (int N=2; N<=numFFT; N*=2)
             for (int k=0; k<=N/2-1; k++)
-                twiddle[N][k] = exp(-2*PI*k/N*J);
+                twiddle[N][k] = exp(-2*M_PI*k/N*J);
     }
     
     // Cooley-Tukey DIT-FFT recursive function
@@ -164,7 +163,7 @@ private:
 
         hamming.assign(winLengthSamples,0);
         for (i=0; i<winLengthSamples; i++)
-            hamming[i] = 0.54 - 0.46 * cos(2 * PI * i / (winLengthSamples-1));
+            hamming[i] = 0.54 - 0.46 * cos(2 * M_PI * i / (winLengthSamples-1));
 
         v_d v1(numCepstra+1,0), v2(numFilters,0);
         for (i=0; i <= numCepstra; i++)
@@ -177,7 +176,7 @@ private:
         for (i=0; i<=numCepstra; i++) {
             v_d dtemp;
             for (j=0; j<numFilters; j++)
-                dtemp.push_back (c * cos(PI / numFilters * v1[i] * v2[j]));
+                dtemp.push_back (c * cos(M_PI / numFilters * v1[i] * v2[j]));
             dct.push_back(dtemp);
         }
     }
