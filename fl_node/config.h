@@ -13,7 +13,5 @@
 #define MQTT_PORT 1883
 #define MQTT_USERNAME "admin"
 #define MQTT_PASSWORD "public"
-#define MQTT_TOPIC_SUB "from-server/"
-#define MQTT_TOPIC_OUT "to-server/"
 
 #define FL_APP_PORT 13

@@ -1,5 +1,4 @@
 #include "fl.h"
-#include "NN/NN.h"
 #include "mfcc.cpp"
 
 typedef uint16_t scaledType;
@@ -9,11 +8,11 @@ typedef uint16_t scaledType;
 #define SAMPLE_COUNT 16000
 
 short sample[SAMPLE_COUNT];
-static NeuralNetwork myNetwork;
 uint16_t num_epochs = 0;
 
 void Fl::initFl() {
     Log.notice(F("Initializing fl" CR));
+    myNetwork = new NeuralNetwork();
     receiveModel();
 }
 
@@ -31,16 +30,16 @@ void Fl::receiveModel() {
     float learningRate = readFloat();
     float momentum = readFloat();
 
-    myNetwork.initialize(learningRate, momentum);
+    myNetwork->initialize(learningRate, momentum);
 
-    char* myHiddenWeights = (char*) myNetwork.get_HiddenWeights();
+    char* myHiddenWeights = (char*) myNetwork->get_HiddenWeights();
     for (uint16_t i = 0; i < (InputNodes+1) * NN_HIDDEN_NEURONS; ++i) {
         Serial.write('n');
         while(Serial.available() < 4) {}
         for (int n = 0; n < 4; n++) myHiddenWeights[i*4+n] = Serial.read();
     }
 
-    char* myOutputWeights = (char*) myNetwork.get_OutputWeights();
+    char* myOutputWeights = (char*) myNetwork->get_OutputWeights();
     for (uint16_t i = 0; i < (NN_HIDDEN_NEURONS+1) * OutputNodes; ++i) {
         Serial.write('n');
         while(Serial.available() < 4) {}
@@ -55,11 +54,11 @@ void Fl::train(int nb, bool only_forward) {
     myTarget[nb-1] = 1.f; // button 1 -> {1,0,0};  button 2 -> {0,1,0};  button 3 -> {0,0,1}
 
     // FORWARD
-    float forward_error = myNetwork.forward(sample, myTarget);
+    float forward_error = myNetwork->forward(sample, myTarget);
     
     // BACKWARD
     if (!only_forward) {
-        myNetwork.backward(sample, myTarget);
+        myNetwork->backward(sample, myTarget);
         ++num_epochs;
     }
 
@@ -67,7 +66,7 @@ void Fl::train(int nb, bool only_forward) {
     Serial.println("graph");
 
     // Print outputs
-    float* output = myNetwork.get_output();
+    float* output = myNetwork->get_output();
     for (size_t i = 0; i < OutputNodes; i++) {
         Serial.println(output[i]);
         // ei_printf_float(output[i]);
@@ -116,8 +115,8 @@ void Fl::startFl() {
         num_epochs = 0;
 
         // Find min and max weights
-        float* float_hidden_weights = myNetwork.get_HiddenWeights();
-        float* float_output_weights = myNetwork.get_OutputWeights();
+        float* float_hidden_weights = myNetwork->get_HiddenWeights();
+        float* float_output_weights = myNetwork->get_OutputWeights();
         float min_weight = float_hidden_weights[0];
         float max_weight = float_hidden_weights[0];
         for(uint i = 0; i < hiddenWeightsAmt; i++) {
@@ -133,14 +132,14 @@ void Fl::startFl() {
         Serial.write((byte *) &max_weight, sizeof(float));
 
         // Sending hidden layer
-        char* hidden_weights = (char*) myNetwork.get_HiddenWeights();
+        char* hidden_weights = (char*) myNetwork->get_HiddenWeights();
         for (uint16_t i = 0; i < hiddenWeightsAmt; ++i) {
             scaledType weight = scaleWeight(min_weight, max_weight, float_hidden_weights[i]);
             Serial.write((byte*) &weight, sizeof(scaledType));
         }
 
         // Sending output layer
-        char* output_weights = (char*) myNetwork.get_OutputWeights();
+        char* output_weights = (char*) myNetwork->get_OutputWeights();
         for (uint16_t i = 0; i < outputWeightsAmt; ++i) {
             scaledType weight = scaleWeight(min_weight, max_weight, float_output_weights[i]);
             Serial.write((byte*) &weight, sizeof(scaledType));

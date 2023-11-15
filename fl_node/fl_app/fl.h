@@ -4,7 +4,8 @@
 #include "message/messageManager.h"
 #include "flMessage.h"
 #include "flCommandService.h"
-#include "config.h"
+#include "settings.h"
+#include "NN/NN.h"
 
 class Fl: public MessageService {
 public:
@@ -37,6 +38,8 @@ public:
     void processReceivedMessage(messagePort port, DataMessage* message);
 
 private:
+    NeuralNetwork* myNetwork;
+
     Fl(): MessageService(FL_APP_PORT, "Fl") {
         commandService = flCommandService;
     };
