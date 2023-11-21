@@ -14,18 +14,18 @@ public:
         return instance;
     }
 
-    void initFl();
+    void initFl(bool receive_model);
 
     void receiveSampleAndTrain();
     void train(int nb, bool only_forward);
     void startFl();
     void receiveModel();
 
-    String flSendWeights();
+    String sendWeights();
+    String sendStatus();
 
-    String flGetWeights(uint16_t dst);
-    
-    void createAndSendFl();
+    String flGetWeights(FlMessage* flMessage);
+    String flGetStatus(FlMessage* flMessage);
 
     String getJSON(DataMessage* message);
 
@@ -33,7 +33,7 @@ public:
 
     DataMessage* getDataMessage(JsonObject data);
 
-    DataMessage* getFlMessage(FlCommand command, uint16_t dst);
+    FlMessage* getFlMessage(FlCommand command, uint16_t dst);
 
     void processReceivedMessage(messagePort port, DataMessage* message);
 

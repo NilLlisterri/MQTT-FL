@@ -8,13 +8,13 @@ LC lc;
 
 void setup() {
     Serial.begin(115200);
-    Log.begin(LOG_LEVEL_VERBOSE, &Serial);
+    Log.begin(LOG_LEVEL_INFO, &Serial);
 
     lc.init(String(WIFI_SSID), String(WIFI_PASSWORD), String(MQTT_SERVER), MQTT_PORT, String(MQTT_USERNAME), String(MQTT_PASSWORD));
     lc.registerApplication(&flApp);
     lc.printCommands();
 
-    flApp.initFl();
+    flApp.initFl(false);
 }
 
 void loop() {
@@ -30,5 +30,6 @@ void loop() {
         }
     } else {
         delay(100);
+        // Serial.println(lc.getClients());
     }
 }

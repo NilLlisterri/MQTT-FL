@@ -10,10 +10,12 @@ typedef uint16_t scaledType;
 short sample[SAMPLE_COUNT];
 uint16_t num_epochs = 0;
 
-void Fl::initFl() {
+void Fl::initFl(bool receive_model) {
     Log.notice(F("Initializing fl" CR));
     myNetwork = new NeuralNetwork();
-    receiveModel();
+    if (receive_model) {
+        receiveModel();
+    }
 }
 
 void Fl::receiveModel() {
@@ -167,19 +169,34 @@ void Fl::startFl() {
 }
 
 // start of commands for FL
-String Fl::flSendWeights() {
-    Log.verboseln(F("Fl wait"));
+String Fl::sendWeights() {
+    ESP_LOGI("FL", "Sending weights for batch...");
+    FlMessage* message = getFlMessage(FlCommand::SendWeights, 1);
+
+    JsonArray weights = message->data.createNestedArray("weights");
+    for(auto i = 0; i < 10; i++) weights.add(i);
+
+    message->data["batch"] = 1;
+    MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
+    delete message;
+
+    return "Fl wait";
+}
+String Fl::sendStatus() {
+    ESP_LOGI("FL", "Sending status for batch...");
     return "Fl wait";
 }
 
-String Fl::flGetWeights(uint16_t dst) {
-    if (dst == LoraMesher::getInstance().getLocalAddress())
-        return flSendWeights();
+String Fl::flGetWeights(FlMessage* flMessage) {
+    // if (dst == LoraMesher::getInstance().getLocalAddress())
+    return sendWeights();
 
-    DataMessage* msg = getFlMessage(FlCommand::GetWeights, dst);
-    MessageManager::getInstance().sendMessage(messagePort::LoRaMeshPort, msg);
+    return "Fl wait";
+}
 
-    delete msg;
+String Fl::flGetStatus(FlMessage* flMessage) {
+    // if (dst == LoraMesher::getInstance().getLocalAddress())
+    return sendStatus();
 
     return "Fl wait";
 }
@@ -192,7 +209,7 @@ DataMessage* Fl::getDataMessage(JsonObject data) {
     return ((DataMessage*) flMessage);
 }
 
-DataMessage* Fl::getFlMessage(FlCommand command, uint16_t dst) {
+FlMessage* Fl::getFlMessage(FlCommand command, uint16_t dst) {
     FlMessage* flMessage = new FlMessage();
 
     flMessage->messageSize = sizeof(FlMessage) - sizeof(DataMessageGeneric);
@@ -204,15 +221,24 @@ DataMessage* Fl::getFlMessage(FlCommand command, uint16_t dst) {
     flMessage->addrSrc = LoraMesher::getInstance().getLocalAddress();
     flMessage->addrDst = dst;
 
-    return (DataMessage*) flMessage;
+    return flMessage;
 }
 
 void Fl::processReceivedMessage(messagePort port, DataMessage* message) {
     FlMessage* flMessage = (FlMessage*) message;
 
+    ESP_LOGV("FL", "Message received");
+
+    ESP_LOGV("FL", "El comando: %d", flMessage->flCommand);
+
     switch (flMessage->flCommand) {
         case FlCommand::GetWeights:
-            flGetWeights(1);
+            ESP_LOGV("FL", "Éxito");
+            flGetWeights(flMessage);
+            break;
+        case FlCommand::GetStatus:
+            ESP_LOGV("FL", "Éxito 2");
+            flGetStatus(flMessage);
             break;
         default:
             break;
@@ -230,25 +256,6 @@ String Fl::getJSON(DataMessage* message) {
     String json;
     serializeJson(doc, json);
     return json;
-}
-
-void Fl::createAndSendFl() {
-    uint16_t messageWithHeaderSize = sizeof(FlMessage);// + metadataSensorSize;
-    FlMessage* message = (FlMessage*) malloc(messageWithHeaderSize);
-
-    Log.verboseln(F("Sending fl message"));
-
-    if (message) {
-        message->appPortDst = appPort::MQTTApp;
-        message->appPortSrc = static_cast<appPort>((uint8_t) FL_APP_PORT);
-        message->addrSrc = LoraMesher::getInstance().getLocalAddress();
-        message->addrDst = 0;
-        message->messageSize = messageWithHeaderSize - sizeof(DataMessageGeneric);
-        MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
-        free(message);
-    } else {
-        Log.errorln(F("Failed to allocate memory for fl message"));
-    }
 }
 
 void Fl::getJSONDataObject(JsonObject& doc, FlMessage* flMessage) {

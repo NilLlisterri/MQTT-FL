@@ -20,20 +20,20 @@ def on_message(client, userdata, msg):
     print("[NODE] Message received: ", msg.topic+" "+str(msg.payload))
     payload = json.loads(msg.payload)
 
-    if payload['type'] == 'get_status':
+    if payload['command'] == 'get_status':
         mqtt_client.publish(config["MQTT_TO_SERVER_TOPIC"] + '/' + str(client_id), json.dumps({
-            'type': 'status',
+            'command': 'status',
             'client_id': client_id,
             'epochs': 1
         }))
-    elif payload['type'] == 'get_weights':
+    elif payload['command'] == 'get_weights':
         mqtt_client.publish(config["MQTT_TO_SERVER_TOPIC"] + '/' + str(client_id), json.dumps({
-            'type': 'weights', 
+            'command': 'weights', 
             'client_id': client_id,
             'batch': payload['batch'], 
             'weights': random.sample(range(10, 30), 5)
         })) # Max: 268435455 bytes
-    elif payload['type'] == 'update_weights':
+    elif payload['command'] == 'update_weights':
         print(f"[NODE] Batch {payload['batch']} of weights updated")
 
 mqtt_client.on_connect = on_connect
