@@ -15,3 +15,5 @@
 #define MQTT_PASSWORD "public"
 
 #define FL_APP_PORT 13
+
+#define SEND_STATUS_DELAY_SECONDS 5

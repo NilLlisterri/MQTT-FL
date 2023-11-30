@@ -18,10 +18,10 @@ public:
 
     void receiveSampleAndTrain();
     void train(int nb, bool only_forward);
-    void startFl();
+    //void startFl();
     void receiveModel();
 
-    String sendWeights();
+    String sendWeights(DynamicJsonDocument data);
     String sendStatus();
 
     String flGetWeights(FlMessage* flMessage);
@@ -39,6 +39,7 @@ public:
 
 private:
     NeuralNetwork* myNetwork;
+    uint16_t num_epochs = 0;
 
     Fl(): MessageService(FL_APP_PORT, "Fl") {
         commandService = flCommandService;

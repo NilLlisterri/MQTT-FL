@@ -8,7 +8,6 @@ typedef uint16_t scaledType;
 #define SAMPLE_COUNT 16000
 
 short sample[SAMPLE_COUNT];
-uint16_t num_epochs = 0;
 
 void Fl::initFl(bool receive_model) {
     Log.notice(F("Initializing fl" CR));
@@ -61,7 +60,7 @@ void Fl::train(int nb, bool only_forward) {
     // BACKWARD
     if (!only_forward) {
         myNetwork->backward(sample, myTarget);
-        ++num_epochs;
+        ++this->num_epochs;
     }
 
     // Info to plot
@@ -80,7 +79,7 @@ void Fl::train(int nb, bool only_forward) {
     // ei_printf_float(forward_error);
     Serial.println(forward_error);
     Serial.print("\n");
-    Serial.println(num_epochs, DEC);
+    Serial.println(this->num_epochs, DEC);
     char* myError = (char*) &forward_error;
     Serial.write(myError, sizeof(float));
     Serial.println(nb, DEC);
@@ -107,14 +106,14 @@ void Fl::receiveSampleAndTrain() {
     train(num_button, only_forward);
 }
 
-
+/*
 void Fl::startFl() {
     Serial.write('<');
     while(!Serial.available()) {}
     if (Serial.read() == 's') {
         Serial.println("start");
-        Serial.println(num_epochs);
-        num_epochs = 0;
+        Serial.println(this->num_epochs);
+        this->num_epochs = 0;
 
         // Find min and max weights
         float* float_hidden_weights = myNetwork->get_HiddenWeights();
@@ -167,37 +166,48 @@ void Fl::startFl() {
         Serial.println("Model received");
     }
 }
+*/
 
 // start of commands for FL
-String Fl::sendWeights() {
-    ESP_LOGI("FL", "Sending weights for batch...");
+String Fl::sendWeights(DynamicJsonDocument requestData) {
+    ESP_LOGI("FL", "Sending weights for batch %d (batch size: %d)...", requestData["batch"], requestData["batch_size"]);
     FlMessage* message = getFlMessage(FlCommand::SendWeights, 1);
 
-    JsonArray weights = message->data.createNestedArray("weights");
-    for(auto i = 0; i < 10; i++) weights.add(i);
+    message->data["batch"] = requestData["batch"];
 
-    message->data["batch"] = 1;
+    JsonArray weights = message->data.createNestedArray("weights");
+    for(int i = 0; i < requestData["batch_size"]; i++) {
+        bool res = weights.add(i); // TODO: Send real weights
+    }
+
+    // serializeJson(message->data, Serial);
+
     MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
     delete message;
 
     return "Fl wait";
 }
+
 String Fl::sendStatus() {
-    ESP_LOGI("FL", "Sending status for batch...");
+    ESP_LOGI("FL", "Sending status...");
+    FlMessage* message = getFlMessage(FlCommand::SendStatus, 1);
+
+    message->data["epochs"] = this->num_epochs;
+    MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
+    delete message;
     return "Fl wait";
 }
 
 String Fl::flGetWeights(FlMessage* flMessage) {
     // if (dst == LoraMesher::getInstance().getLocalAddress())
-    return sendWeights();
-
+    // int batch = flMessage->data["batch"];
+    sendWeights(flMessage->data);
     return "Fl wait";
 }
 
 String Fl::flGetStatus(FlMessage* flMessage) {
     // if (dst == LoraMesher::getInstance().getLocalAddress())
     return sendStatus();
-
     return "Fl wait";
 }
 
@@ -205,7 +215,6 @@ DataMessage* Fl::getDataMessage(JsonObject data) {
     FlMessage* flMessage = new FlMessage();
     flMessage->deserialize(data);
     flMessage->messageSize = sizeof(FlMessage) - sizeof(DataMessageGeneric);
-
     return ((DataMessage*) flMessage);
 }
 
@@ -226,11 +235,7 @@ FlMessage* Fl::getFlMessage(FlCommand command, uint16_t dst) {
 
 void Fl::processReceivedMessage(messagePort port, DataMessage* message) {
     FlMessage* flMessage = (FlMessage*) message;
-
-    ESP_LOGV("FL", "Message received");
-
-    ESP_LOGV("FL", "El comando: %d", flMessage->flCommand);
-
+    ESP_LOGV("FL", "Message received, command: %d", flMessage->flCommand);
     switch (flMessage->flCommand) {
         case FlCommand::GetWeights:
             ESP_LOGV("FL", "Éxito");
@@ -247,7 +252,7 @@ void Fl::processReceivedMessage(messagePort port, DataMessage* message) {
 
 String Fl::getJSON(DataMessage* message) {
     FlMessage* flMessage = (FlMessage*) message;
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(FlMessage::MAX_JSON_SIZE);
     JsonObject jsonObj = doc.to<JsonObject>();
     JsonObject dataObj = jsonObj.createNestedObject("data");
 
@@ -261,4 +266,3 @@ String Fl::getJSON(DataMessage* message) {
 void Fl::getJSONDataObject(JsonObject& doc, FlMessage* flMessage) {
     flMessage->serialize(doc);
 }
-
