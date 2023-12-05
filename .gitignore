@@ -1,5 +1,7 @@
-./fl_server/.env
-./fl_node/config.h
+host/.env
+node/secrets.h
+host/.idea
+host/__pycache__
 
 .pio
 .vscode/.browse.c_cpp.db*
