@@ -19,7 +19,7 @@ public:
 
     void receiveSampleAndTrain();
     void train(int nb, bool only_forward);
-    //void startFl();
+
     void receiveModel();
 
     String sendWeights(DynamicJsonDocument data);
@@ -45,6 +45,4 @@ private:
     Fl(): MessageService(FL_APP_PORT, "Fl") {
         commandService = flCommandService;
     };
-
-    void getJSONDataObject(JsonObject& doc, FlMessage* fldataMessage);
 };

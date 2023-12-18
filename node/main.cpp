@@ -34,10 +34,16 @@ void setup() {
 }
 
 uint32_t lastStatusBroadcast = millis();
+uint32_t lastDisplayUpdate = millis();
 void loop() {
     if (millis() - lastStatusBroadcast > 5000) { // 5s
         lastStatusBroadcast = millis();
         flApp.sendStatus();
+    }
+
+    if (millis() - lastDisplayUpdate > 500) { // 5s
+        lastDisplayUpdate = millis();
+        lc.displayStatus();
     }
 
     if (Serial.available()) {

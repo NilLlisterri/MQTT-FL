@@ -129,67 +129,6 @@ void Fl::receiveSampleAndTrain() {
     train(num_button, only_forward);
 }
 
-/*
-void Fl::startFl() {
-    Serial.write('<');
-    while(!Serial.available()) {}
-    if (Serial.read() == 's') {
-        Serial.println("start");
-        Serial.println(this->num_epochs);
-        this->num_epochs = 0;
-
-        // Find min and max weights
-        float* float_hidden_weights = network->get_HiddenWeights();
-        float* float_output_weights = network->get_OutputWeights();
-        float min_weight = float_hidden_weights[0];
-        float max_weight = float_hidden_weights[0];
-        for(uint i = 0; i < hiddenWeightsAmt; i++) {
-            if (min_weight > float_hidden_weights[i]) min_weight = float_hidden_weights[i];
-            if (max_weight < float_hidden_weights[i]) max_weight = float_hidden_weights[i];
-        }
-        for(uint i = 0; i < outputWeightsAmt; i++) {
-            if (min_weight > float_output_weights[i]) min_weight = float_output_weights[i];
-            if (max_weight < float_output_weights[i]) max_weight = float_output_weights[i];
-        }
-
-        Serial.write((byte *) &min_weight, sizeof(float));
-        Serial.write((byte *) &max_weight, sizeof(float));
-
-        // Sending hidden layer
-        char* hidden_weights = (char*) network->get_HiddenWeights();
-        for (uint16_t i = 0; i < hiddenWeightsAmt; ++i) {
-            scaledType weight = scaleWeight(min_weight, max_weight, float_hidden_weights[i]);
-            Serial.write((byte*) &weight, sizeof(scaledType));
-        }
-
-        // Sending output layer
-        char* output_weights = (char*) network->get_OutputWeights();
-        for (uint16_t i = 0; i < outputWeightsAmt; ++i) {
-            scaledType weight = scaleWeight(min_weight, max_weight, float_output_weights[i]);
-            Serial.write((byte*) &weight, sizeof(scaledType));
-        }
-
-        while (!Serial.available()) delay(100);
-
-        float min_received_w = readFloat();
-        float max_received_w = readFloat();
-
-        // Receiving hidden layer
-        for (uint16_t i = 0; i < hiddenWeightsAmt; ++i) {
-            scaledType val;
-            Serial.readBytes((byte*) &val, sizeof(scaledType));
-            float_hidden_weights[i] = deScaleWeight(min_received_w, max_received_w, val);
-        }
-        // Receiving output layer
-        for (uint16_t i = 0; i < outputWeightsAmt; ++i) {
-            scaledType val;
-            Serial.readBytes((byte*) &val, sizeof(scaledType));
-            float_output_weights[i] = deScaleWeight(min_received_w, max_received_w, val);
-        }
-        Serial.println("Model received");
-    }
-}
-*/
 
 // start of commands for FL
 String Fl::sendWeights(DynamicJsonDocument requestData) {
@@ -198,6 +137,12 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
 
     message->data["batch"] = requestData["batch"];
     JsonArray weights = message->data.createNestedArray("weights");
+    
+    if (weights.isNull()) {
+        ESP_LOGE("FL", "Could not create the weights nested array");
+        delete message;
+        return "Weights could not be sent";
+    }
 
     float* hidden_weights = network->get_HiddenWeights();
     float* output_weights = network->get_OutputWeights();
@@ -207,13 +152,16 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
     for (int current = start; current - start < requestData["batch_size"]; current++) {
         if (current >= hiddenWeightsAmt + outputWeightsAmt) break;
         
-        if (current < hiddenWeightsAmt) weights.add(hidden_weights[current]);
-        else weights.add(output_weights[current - hiddenWeightsAmt]);
-    }
+        bool success;
+        if (current < hiddenWeightsAmt) success = weights.add(hidden_weights[current]);
+        else success = weights.add(output_weights[current - hiddenWeightsAmt]);
 
-    // for(int i = 0; i < requestData["batch_size"]; i++) {
-    //     bool res = weights.add(i); // TODO: Send real weights
-    // }
+        if (!success) {
+            ESP_LOGE("FL", "Could not add all of the weights");
+            delete message;
+            return "Weights could not be sent";
+        }
+    }
 
     // serializeJson(message->data, Serial);
 
@@ -273,11 +221,11 @@ void Fl::processReceivedMessage(messagePort port, DataMessage* message) {
     ESP_LOGV("FL", "Message received, command: %d", flMessage->flCommand);
     switch (flMessage->flCommand) {
         case FlCommand::GetWeights:
-            ESP_LOGV("FL", "Éxito");
+            ESP_LOGV("FL", "Get weights command received");
             flGetWeights(flMessage);
             break;
         case FlCommand::GetStatus:
-            ESP_LOGV("FL", "Éxito 2");
+            ESP_LOGV("FL", "Get status command received");
             flGetStatus(flMessage);
             break;
         default:
@@ -290,14 +238,13 @@ String Fl::getJSON(DataMessage* message) {
     DynamicJsonDocument doc(FlMessage::MAX_JSON_SIZE);
     JsonObject jsonObj = doc.to<JsonObject>();
     JsonObject dataObj = jsonObj.createNestedObject("data");
+    if (dataObj.isNull()) {
+        ESP_LOGE("FL", "Could not add the data object to the JSON message");
+    }
 
-    getJSONDataObject(dataObj, flMessage);
+    flMessage->serialize(dataObj);
 
     String json;
     serializeJson(doc, json);
     return json;
-}
-
-void Fl::getJSONDataObject(JsonObject& doc, FlMessage* flMessage) {
-    flMessage->serialize(doc);
 }

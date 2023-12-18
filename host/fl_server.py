@@ -38,13 +38,13 @@ class FLServer:
         self.mqttClient.loop_start()
 
     def getWeights(self):
-        for i in trange(MQTT_NUM_BATCHES, desc="Getting weights from clients"):
+        for i in trange(MQTT_NUM_BATCHES, desc="[SERVER] Getting weights from clients"):
             for client_id in self.clients:
                 message = self.buildCommand({"flCommand": GET_WEIGHTS_COMMAND, 'data': {"batch": i, "batch_size": MQTT_WEIGHTS_BATCH_SIZE}})
                 print(f"[SERVER] Requesting batch {i} of weights from: {client_id}")
                 self.mqttClient.publish(MQTT_FROM_SERVER_TOPIC + '/' + str(client_id), message)
-            time.sleep(3)
-
+            
+            while len(self.clients[client_id]['weights'][i]) == 0: time.sleep(0.1)
 
     def calculateFedAvgBatches(self):
         weight_batches = [client['weights'] for client in self.clients.values()]
@@ -70,7 +70,11 @@ class FLServer:
 
     def on_message(self, client, userdata, msg):
         print("[SERVER] Message received on topic ", msg.topic + ": " + msg.payload.decode('utf8'))
-        payload = json.loads(msg.payload)['data']
+        jsonMessage = json.loads(msg.payload)
+        if not 'data' in jsonMessage:
+            print("[SERVER] Payload not found in data, this is an ERROR!")
+            return
+        payload = jsonMessage['data']
         client = payload['addrSrc']
         if client not in self.clients:
             self.addClient(client)

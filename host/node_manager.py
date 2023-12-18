@@ -28,12 +28,12 @@ class NodeManager:
         self.seed = 123
         # Keyword samples split
         self.samples_folder = "./datasets/keywords"
-        train_samples_split = 160 # Number of samples for training of each keyword
-        test_samples_split = 20   # Number of samples for training of each keyword
+        train_samples_split = 160       # Number of samples for training of each keyword
+        test_samples_split = 20         # Number of samples for training of each keyword
 
         # Experiment sizes
-        self.training_epochs = 160     # Amount of training epochs. Can't be more than kws * train_samples_split
-        self.testing_epochs = 60       # Amount of test samples of each keyword. Can't be more than kws * test_samples_split
+        self.training_epochs = 160      # Amount of training epochs. Can't be more than kws * train_samples_split
+        self.testing_epochs = 60        # Amount of test samples of each keyword. Can't be more than kws * test_samples_split
 
         self.momentum = 0.9
         self.learningRate= 0.05
@@ -41,7 +41,7 @@ class NodeManager:
         self.enableFL = True
         self.enableTest = True
         self.enablePlot = False
-        self.batch_size = 4 #90        # Must be divisble by the amount of keywords
+        self.batch_size = 4             # Must be divisble by the amount of keywords
         self.scaledWeightsBytes = 2
         self.scaledWeightBits = 16
         self.interactive = True
@@ -287,11 +287,20 @@ class NodeManager:
             plt.pause(0.1)
             time.sleep(0.4)
 
-    def startExperiment(self, flServer: FLServer):
+    # It can be used to debug certain steps in the communication
+    def readSerial(self):
+        while True:
+            print(self.devices[0].readline())
 
+
+    def startExperiment(self, flServer: FLServer):
         self.initializeDevices()
         
-        # flServer.startFL()
+        # thread = threading.Thread(target=self.readSerial, args=())
+        # thread.daemon = True
+        # thread.start()
+
+        flServer.startFL()
 
         if self.enablePlot:
             # Start plotting thread
