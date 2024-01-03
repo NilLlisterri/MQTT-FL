@@ -6,6 +6,9 @@ Create the `secrets.h` file in the `node` directory to define the WiFi SSID and 
 #define WIFI_PASSWORD "XXX"
 ```
 
+Upload the code to the nodes:  
+`pio run --target upload --upload-port com3; pio run --target upload --upload-port com20`
+
 Install the required Python libraries:  
 `pip install -r host/requirements.txt`  
 
