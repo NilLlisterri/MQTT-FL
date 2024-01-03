@@ -8,6 +8,7 @@ from tqdm import tqdm
 from tqdm import trange
 from constants import *
 import math
+import utils
 
 MQTT_HOST = "localhost"
 MQTT_PORT = 1883
@@ -26,8 +27,7 @@ MQTT_NUM_BATCHES = math.ceil((SIZE_HIDDEN_LAYER + SIZE_OUTPUT_LAYER) / MQTT_WEIG
 class FLServer:
 
     def __init__(self):
-        self.clients = {} # This should be empty, and clients should be discovered by the server
-        
+        self.clients = {}
         self.connectToMQTTServer()
 
     def connectToMQTTServer(self):
@@ -39,30 +39,44 @@ class FLServer:
 
     def getWeights(self):
         for i in trange(MQTT_NUM_BATCHES, desc="[SERVER] Getting weights from clients"):
-            for client_id in self.clients:
-                message = self.buildCommand({"flCommand": GET_WEIGHTS_COMMAND, 'data': {"batch": i, "batch_size": MQTT_WEIGHTS_BATCH_SIZE}})
-                print(f"[SERVER] Requesting batch {i} of weights from: {client_id}")
-                self.mqttClient.publish(MQTT_FROM_SERVER_TOPIC + '/' + str(client_id), message)
-            
-            while len(self.clients[client_id]['weights'][i]) == 0: time.sleep(0.1)
+            for clientId in self.clients:
+                missingWeights = lambda: len(self.clients[clientId]['weights'][i]) == 0
+                lastRequestTime = None
+                while missingWeights():
+                    if lastRequestTime == None or time.time() - lastRequestTime >= 10:
+                        print(f"[SERVER] Requesting batch {i} of weights from: {clientId}")
+                        message = self.buildCommand(clientId, {
+                            "flCommand": GET_WEIGHTS_COMMAND, 
+                            'data': {"batch": i, "batch_size": MQTT_WEIGHTS_BATCH_SIZE}
+                        })
+                        self.mqttClient.publish(MQTT_FROM_SERVER_TOPIC + '/' + str(clientId), message)
+                        lastRequestTime = time.time()
+                    else:
+                        time.sleep(0.1)
 
     def calculateFedAvgBatches(self):
-        weight_batches = [client['weights'] for client in self.clients.values()]
+        # TODO: Ugly and unintuitive, improve
+        all_weights = [([w for ws in client['weights'] for w in ws]) for client in self.clients.values()]
         epochs = [client["epochs"] for client in self.clients.values()]
-        return np.average(weight_batches, axis=0, weights=epochs)
-
+        weight_averages = np.average(all_weights, axis=0, weights=epochs)
+        return np.array_split(weight_averages, MQTT_WEIGHTS_BATCH_SIZE)
 
     def sendWeights(self, weight_batches):
+        # TODO: Verify the weights arrived correctly, ack?
         for i in trange(MQTT_NUM_BATCHES, desc="Sending weights to clients"):
+            min, max, weights = utils.scaleWeights(weight_batches[i].tolist(), SCALED_WEIGHT_BITS)
+            #weights = weight_batches[i].tolist()
             self.mqttClient.publish(MQTT_FROM_SERVER_TOPIC, json.dumps({
                 'flCommand': UPDATE_WEIGHTS_COMMAND,
                 'data': {
                     'batch': i,
-                    'weights': weight_batches[i].tolist()
+                    'batch_size': MQTT_WEIGHTS_BATCH_SIZE,
+                    'weights': weights,
+                    'min': min, 
+                    'max': max
                 }
             }))
-            time.sleep(2)
-
+            time.sleep(1)
 
     def on_connect(self, client, userdata, flags, rc):
         print("[SERVER] Connected with result code " + str(rc))
@@ -79,11 +93,15 @@ class FLServer:
         if client not in self.clients:
             self.addClient(client)
         if payload['flCommand'] == SEND_STATUS_COMMAND:
-            # clients[client]['epochs'] = payload['data']['epochs'] // TODO: This will be used when nodes can be trained via serial
-            self.clients[client]['epochs'] = 1
+            self.clients[client]['epochs'] = payload['data']['epochs']
         if payload['flCommand'] == SEND_WEIGHTS_COMMAND:
-            batch = payload['data']['batch']
-            self.clients[client]['weights'][batch] = payload['data']['weights']
+            self.weightsReceived(client, payload['data'])
+
+    def weightsReceived(self, client, data):
+        batch = data['batch']
+        min_w = data['min']
+        max_w = data['max']
+        self.clients[client]['weights'][batch] = [utils.deScaleWeight(min_w, max_w, w, SCALED_WEIGHT_BITS) for w in data['weights']]
 
     def addClient(self, id):
         print(f"New client added with id {id}")
@@ -93,17 +111,17 @@ class FLServer:
     def resetClientWeights(self, id = None):
         if id == None:
             for clientId in self.clients: 
-                self.clients[clientId]["weights"] = [[] for _ in range(MQTT_WEIGHTS_BATCH_SIZE)]
+                self.clients[clientId]["weights"] = [[] for _ in range(MQTT_NUM_BATCHES)]
         else: 
-            self.clients[id]["weights"] = [[] for _ in range(MQTT_WEIGHTS_BATCH_SIZE)]
+            self.clients[id]["weights"] = [[] for _ in range(MQTT_NUM_BATCHES)]
 
-    def buildCommand(self, data):
+    def buildCommand(self, clientId, data):
         message = {
             "data": {
-                "appPortDst": 13,
-                "appPortSrc": 13,
-                "addrDst": 22240,
-                "client_id": 22240,
+                "appPortDst": FL_APP_PORT,
+                "appPortSrc": FL_APP_PORT,
+                "addrDst": clientId,
+                "client_id": clientId,
             }
         }
         message["data"].update(data)

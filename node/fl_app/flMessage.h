@@ -8,7 +8,8 @@ enum FlCommand: uint8_t {
     GetWeights = 0,
     GetStatus = 1,
     SendWeights = 2,
-    SendStatus = 3
+    SendStatus = 3,
+    UpdateWeights = 4
 };
 
 class FlMessage: public DataMessageGeneric {

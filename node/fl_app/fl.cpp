@@ -22,7 +22,7 @@ static inference_t inference;
 
 void Fl::initFl(bool receive_model) {
     Log.notice(F("Initializing fl" CR));
-    network = new NeuralNetwork();
+    network = new NeuralNetwork<NN_HIDDEN_NEURONS>();
     if (receive_model) {
         receiveModel();
     }
@@ -40,14 +40,14 @@ void Fl::receiveModel() {
     network->initialize(learningRate, momentum);
 
     char* myHiddenWeights = (char*) network->get_HiddenWeights();
-    for (uint16_t i = 0; i < (InputNodes+1) * NN_HIDDEN_NEURONS; ++i) {
+    for (uint16_t i = 0; i < network->getHiddenWeightsAmt(); ++i) {
         Serial.write('n');
         while(Serial.available() < 4) {}
         for (int n = 0; n < 4; n++) myHiddenWeights[i*4+n] = Serial.read();
     }
 
     char* myOutputWeights = (char*) network->get_OutputWeights();
-    for (uint16_t i = 0; i < (NN_HIDDEN_NEURONS+1) * OutputNodes; ++i) {
+    for (uint16_t i = 0; i < network->getOutputWeightsAmt(); ++i) {
         Serial.write('n');
         while(Serial.available() < 4) {}
         for (int n = 0; n < 4; n++) myOutputWeights[i*4+n] = Serial.read();
@@ -66,14 +66,13 @@ void Fl::train(int nb, bool only_forward) {
     signal.total_length = EI_CLASSIFIER_RAW_SAMPLE_COUNT;
     signal.get_data = &microphone_audio_signal_get_data;
     ei::matrix_t features_matrix(1, EI_CLASSIFIER_NN_INPUT_FRAME_SIZE);
-
     EI_IMPULSE_ERROR r = get_one_second_features(&signal, &features_matrix, false);
     if (r != EI_IMPULSE_OK) {
-        Serial.println("ERR: Failed to get features ("+String(r));
+        Serial.println("ERR: Failed to get features ("+String(r)+")");
         return;
     }
 
-    float myTarget[OutputNodes] = {0};
+    float myTarget[network->OutputNodes] = {0};
     myTarget[nb-1] = 1.f; // button 1 -> {1,0,0};  button 2 -> {0,1,0};  button 3 -> {0,0,1}
 
     // FORWARD
@@ -90,7 +89,7 @@ void Fl::train(int nb, bool only_forward) {
 
     // Print outputs
     float* output = network->get_output();
-    for (size_t i = 0; i < OutputNodes; i++) {
+    for (size_t i = 0; i < network->OutputNodes; i++) {
         Serial.print(output[i]);
         // ei_printf_float(output[i]);
         Serial.print(" ");
@@ -147,15 +146,25 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
     float* hidden_weights = network->get_HiddenWeights();
     float* output_weights = network->get_OutputWeights();
 
-    // float values[requestData["batch_size"]];
+    float min = hidden_weights[0];
+    float max = hidden_weights[0];
+    for(uint i = 0; i < network->getHiddenWeightsAmt(); i++) {
+        if (min > hidden_weights[i]) min = hidden_weights[i];
+        if (max < hidden_weights[i]) max = hidden_weights[i];
+    }
+    for(uint i = 0; i < network->getOutputWeightsAmt(); i++) {
+        if (min > output_weights[i]) min = output_weights[i];
+        if (max < output_weights[i]) max = output_weights[i];
+    }
+
+    message->data["min"] = min;
+    message->data["max"] = max;
+
     int start = int(requestData["batch"]) * int(requestData["batch_size"]);
     for (int current = start; current - start < requestData["batch_size"]; current++) {
-        if (current >= hiddenWeightsAmt + outputWeightsAmt) break;
-        
-        bool success;
-        if (current < hiddenWeightsAmt) success = weights.add(hidden_weights[current]);
-        else success = weights.add(output_weights[current - hiddenWeightsAmt]);
-
+        if (current >= network->getHiddenWeightsAmt() + network->getOutputWeightsAmt()) break;
+        float weight = (current < network->getHiddenWeightsAmt()) ? hidden_weights[current] : output_weights[current - network->getOutputWeightsAmt()];
+        bool success = weights.add(scaleWeight(min, max, weight));
         if (!success) {
             ESP_LOGE("FL", "Could not add all of the weights");
             delete message;
@@ -163,12 +172,28 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
         }
     }
 
-    // serializeJson(message->data, Serial);
-
     MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
     delete message;
 
     return "Fl wait";
+}
+
+String Fl::updateWeights(DynamicJsonDocument requestData) {
+    ESP_LOGI("FL", "Updat weights for batch %d (batch size: %d)...", requestData["batch"], requestData["batch_size"]);
+    // TODO: Weights updated confirmation
+
+    float* hidden_weights = network->get_HiddenWeights();
+    float* output_weights = network->get_OutputWeights();
+    int start = int(requestData["batch"]) * int(requestData["batch_size"]);
+    int weights_count = requestData["weights"].size();
+
+    for (int current = start; current < start + weights_count; current++) {
+        float weight = deScaleWeight(requestData["min"], requestData["max"], requestData["weights"][current]);
+        if (current < network->getHiddenWeightsAmt()) hidden_weights[current] = weight;
+        else output_weights[current - network->getHiddenWeightsAmt()] = weight;
+    }
+
+    return "Weights updated";
 }
 
 String Fl::sendStatus() {
@@ -185,6 +210,13 @@ String Fl::flGetWeights(FlMessage* flMessage) {
     // if (dst == LoraMesher::getInstance().getLocalAddress())
     // int batch = flMessage->data["batch"];
     sendWeights(flMessage->data);
+    return "Fl wait";
+}
+
+String Fl::flUpdateWeights(FlMessage* flMessage) {
+    // if (dst == LoraMesher::getInstance().getLocalAddress())
+    // int batch = flMessage->data["batch"];
+    updateWeights(flMessage->data);
     return "Fl wait";
 }
 
@@ -227,6 +259,10 @@ void Fl::processReceivedMessage(messagePort port, DataMessage* message) {
         case FlCommand::GetStatus:
             ESP_LOGV("FL", "Get status command received");
             flGetStatus(flMessage);
+            break;
+        case FlCommand::UpdateWeights:
+            ESP_LOGV("FL", "Update weights command received");
+            flUpdateWeights(flMessage);
             break;
         default:
             break;

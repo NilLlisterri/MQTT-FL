@@ -2,7 +2,6 @@ from ast import keyword
 import warnings
 from matplotlib import figure
 from matplotlib.ticker import MaxNLocator
-import serial
 from serial.tools.list_ports import comports
 import struct
 import time
@@ -24,7 +23,8 @@ from constants import *
 
 class NodeManager:
 
-    def __init__(self):
+    def __init__(self, devices):
+        self.devices = devices
         self.seed = 123
         # Keyword samples split
         self.samples_folder = "./datasets/keywords"
@@ -39,9 +39,9 @@ class NodeManager:
         self.learningRate= 0.05
 
         self.enableFL = True
-        self.enableTest = True
-        self.enablePlot = False
-        self.batch_size = 4             # Must be divisble by the amount of keywords
+        self.enableTest = False
+        self.enablePlot = True
+        self.batch_size = 8             # Must be divisble by the amount of keywords
         self.scaledWeightsBytes = 2
         self.scaledWeightBits = 16
         self.interactive = True
@@ -60,7 +60,6 @@ class NodeManager:
         self.graph = []
         self.fl_round_epochs = []
 
-        self.devices = [serial.Serial("com20", 115200, timeout=2)]
 
         # Load the dataset
         self.words = list(self.keywords_buttons.keys())
@@ -118,12 +117,12 @@ class NodeManager:
             # print(np.array(np.unique(nw, return_counts=True)).T)
             # plt.plot(nw)
             # plt.show()
-            self.initDevice(hidden_layer, output_layer, device)
-            #thread = threading.Thread(target=self.initDevice, args=(hidden_layer, output_layer, d))
-            #thread.daemon = True
-            #thread.start()
-            #threads.append(thread)
-        #for thread in threads: thread.join() # Wait for all the threads to end
+
+            thread = threading.Thread(target=self.initDevice, args=(hidden_layer, output_layer, device))
+            thread.daemon = True
+            thread.start()
+            threads.append(thread)
+        for thread in threads: thread.join() # Wait for all the threads to end
 
     def initDevice(self, hidden_layer, output_layer, device):
         device.reset_input_buffer()
@@ -289,29 +288,34 @@ class NodeManager:
 
     # It can be used to debug certain steps in the communication
     def readSerial(self):
-        while True:
-            print(self.devices[0].readline())
+        while True: print(self.devices[0].readline())
+    
+    def sendTestAllDevices(self):
+        threads = []
+        for deviceIndex, device in enumerate(self.devices):
+            thread = threading.Thread(target=self.sendTestSamples, args=(device, deviceIndex))
+            thread.daemon = True
+            thread.start()
+            threads.append(thread)
+        for thread in threads: thread.join()
 
 
     def startExperiment(self, flServer: FLServer):
         self.initializeDevices()
-        
-        # thread = threading.Thread(target=self.readSerial, args=())
-        # thread.daemon = True
-        # thread.start()
 
-        flServer.startFL()
-
+        # flServer.startFL()
+    
         if self.enablePlot:
             # Start plotting thread
             thread = threading.Thread(target=self.plot, args=["MSE Evolution"])
             thread.daemon = True
             thread.start()
+
         train_ini_time = time.time()
         num_batches = int(self.training_epochs/self.batch_size)
 
-        # if enableFL: startFL() # So I can get the initial weight distribution plot
-        # if enableTest: sendTestAllDevices() # Initial accuracy
+        # if enableFL: startFL() # To get the initial weight distribution plot
+        if self.enableTest: self.sendTestAllDevices() # Initial accuracy
 
         # Train the device
         for batch in range(num_batches):
@@ -319,12 +323,11 @@ class NodeManager:
             if self.debug: print(f"[MAIN] Sending batch {batch + 1}/{num_batches}")
             threads = []
             for deviceIndex, device in enumerate(self.devices):
-                self.sendSamples(device, deviceIndex, batch)
-            #     thread = threading.Thread(target=self.sendSamples, args=(device, deviceIndex, batch))
-            #     thread.daemon = True
-            #     thread.start()
-            #     threads.append(thread)
-            # for thread in threads: thread.join() # Wait for all the threads to end
+                thread = threading.Thread(target=self.sendSamples, args=(device, deviceIndex, batch))
+                thread.daemon = True
+                thread.start()
+                threads.append(thread)
+            for thread in threads: thread.join() # Wait for all the threads to end
             if self.debug: print(f'[MAIN] Batch time: {round(time.time() - batch_ini_time, 3)}s')
         
             if self.enableFL: flServer.startFL()
@@ -337,11 +340,6 @@ class NodeManager:
 
         if self.debug: print(f'[MAIN] Training completed in {time.time() - train_ini_time}s')
 
-def main():
-    print("Available ports: ")
-    for available_port in comports(): print(f"\t{available_port}")
-
-    nodeManager = NodeManager()
-
-if __name__ == "__main__":
-    main() 
+        figname = f"plots/{len(self.devices)}-{SCALED_WEIGHT_BITS}.png"
+        plt.savefig(figname, format='png')
+        print(f"Generated {figname}")

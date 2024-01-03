@@ -5,7 +5,7 @@
 #include "flMessage.h"
 #include "flCommandService.h"
 #include "settings.h"
-#include "NN/NN.h"
+#include "../NN.h"
 
 
 class Fl: public MessageService {
@@ -23,9 +23,11 @@ public:
     void receiveModel();
 
     String sendWeights(DynamicJsonDocument data);
+    String updateWeights(DynamicJsonDocument data);
     String sendStatus();
 
     String flGetWeights(FlMessage* flMessage);
+    String flUpdateWeights(FlMessage* flMessage);
     String flGetStatus(FlMessage* flMessage);
 
     String getJSON(DataMessage* message);
@@ -39,7 +41,7 @@ public:
     void processReceivedMessage(messagePort port, DataMessage* message);
 
 private:
-    NeuralNetwork* network;
+    NeuralNetwork<NN_HIDDEN_NEURONS>* network;
     uint16_t num_epochs = 0;
 
     Fl(): MessageService(FL_APP_PORT, "Fl") {

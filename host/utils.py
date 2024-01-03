@@ -36,3 +36,11 @@ def scaleWeight(min_w, max_w, weight, scaledWeightBits):
 
 def getScaleRange(scaledWeightBits):
     return 0, pow(2, scaledWeightBits)-1
+
+def scaleWeights(weights, scaledWeightBits):
+    min_w = min(weights)
+    max_w = max(weights)
+    return min_w, max_w, [scaleWeight(min_w, max_w, w, scaledWeightBits) for w in weights]
+
+def deScaleWeights(min_w, max_w, weights, scaledWeightBits):
+    return [deScaleWeight(min_w, max_w, w, scaledWeightBits) for w in weights]
