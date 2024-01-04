@@ -299,10 +299,17 @@ class NodeManager:
             threads.append(thread)
         for thread in threads: thread.join()
 
+    def plotAccuracies(self):
+        plt.ylim(bottom=0, top=1)
+        plt.xlim(left=0)
+        plt.autoscale(axis='x')
+        for device_index, device in enumerate(self.devices):
+            #plt.plot(training_accuracy_map[device_index], label=f"Device {device_index}")
+            plt.plot(self.test_accuracies_map[device_index], label=f"Device {device_index}")
 
     def startExperiment(self, flServer: FLServer):
         self.initializeDevices()
-
+        
         # flServer.startFL()
     
         if self.enablePlot:
@@ -340,6 +347,9 @@ class NodeManager:
 
         if self.debug: print(f'[MAIN] Training completed in {time.time() - train_ini_time}s')
 
-        figname = f"plots/{len(self.devices)}-{SCALED_WEIGHT_BITS}.png"
+        flServer.startFL()
+        self.sendTestAllDevices() # Final accuracy
+
+        figname = f"plots/{len(self.devices)}-{HIDDEN_NODES}-{SCALED_WEIGHT_BITS}.png"
         plt.savefig(figname, format='png')
         print(f"Generated {figname}")

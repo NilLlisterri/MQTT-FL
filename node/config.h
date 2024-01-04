@@ -1,6 +1,6 @@
 #include "secrets.h"
 
-#define NN_HIDDEN_NEURONS 8
+#define NN_HIDDEN_NEURONS 9
 
 // This should not be necessary
 #define LED LED_BUILTIN
