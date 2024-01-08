@@ -6,6 +6,8 @@ Create the `secrets.h` file in the `node` directory to define the WiFi SSID and 
 #define WIFI_PASSWORD "XXX"
 ```
 
+Set the MQTT broker IP address modifying the MQTT_SERVER constant in `node/config.h` to your computer's IP.  
+
 Upload the code to the nodes:  
 `pio run --target upload -e ttgo-lora32-v1 --upload-port com3; pio run --target upload -e ttgo-lora32-v1 --upload-port com20;`  
 
