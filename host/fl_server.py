@@ -73,7 +73,8 @@ class FLServer:
                     'batch_size': MQTT_WEIGHTS_BATCH_SIZE,
                     'weights': weights,
                     'min': min, 
-                    'max': max
+                    'max': max,
+                    'bit_width': SCALED_WEIGHT_BITS
                 }
             }))
             time.sleep(1)
@@ -101,7 +102,12 @@ class FLServer:
         batch = data['batch']
         min_w = data['min']
         max_w = data['max']
-        self.clients[client]['weights'][batch] = [utils.deScaleWeight(min_w, max_w, w, SCALED_WEIGHT_BITS) for w in data['weights']]
+        bit_width = data['bit_width']
+        
+        a, b = utils.getScaleRange(bit_width)
+        print(f"[{client}] Weights received. Min: {round(min_w, 5)}, Max: {round(max_w, 5)}, Bit width: {bit_width}, Range: {a} - {b}, Precision: {round((abs(max_w-min_w)) / abs(a-b), 5)}")
+
+        self.clients[client]['weights'][batch] = [utils.deScaleWeight(min_w, max_w, w, bit_width) for w in data['weights']]
 
     def addClient(self, id):
         print(f"New client added with id {id}")
@@ -131,5 +137,5 @@ class FLServer:
         self.resetClientWeights()
         self.getWeights()
         weights = self.calculateFedAvgBatches()
-        self.sendWeights(weights)
+        self.sendWeights(weights,)
 

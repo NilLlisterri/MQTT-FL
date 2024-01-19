@@ -2,7 +2,6 @@
 #include "fl.h"
 #include "mfcc.cpp"
 
-typedef uint16_t scaledType;
 #define SCALED_WEIGHT_BITS 16
 #include "../utils.h"
 
@@ -56,7 +55,7 @@ void Fl::receiveModel() {
     Serial.println("Received new model");
 }
 
-static scaledType microphone_audio_signal_get_data(size_t offset, size_t length, float *out_ptr) {
+static int microphone_audio_signal_get_data(size_t offset, size_t length, float *out_ptr) {
     numpy::int16_to_float(&inference.buffer[offset], out_ptr, length);
     return 0;
 }
@@ -160,11 +159,14 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
     message->data["min"] = min;
     message->data["max"] = max;
 
+    int bit_width = this->getBitWidth();
+    message->data["bit_width"] = bit_width;
+
     int start = int(requestData["batch"]) * int(requestData["batch_size"]);
     for (int current = start; current - start < requestData["batch_size"]; current++) {
         if (current >= network->getHiddenWeightsAmt() + network->getOutputWeightsAmt()) break;
         float weight = (current < network->getHiddenWeightsAmt()) ? hidden_weights[current] : output_weights[current - network->getOutputWeightsAmt()];
-        bool success = weights.add(scaleWeight(min, max, weight));
+        bool success = weights.add(scaleWeight(min, max, weight, bit_width));
         if (!success) {
             ESP_LOGE("FL", "Could not add all of the weights");
             delete message;
@@ -178,6 +180,10 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
     return "Fl wait";
 }
 
+int Fl::getBitWidth() {
+    return SCALED_WEIGHT_BITS;
+}
+
 String Fl::updateWeights(DynamicJsonDocument requestData) {
     ESP_LOGI("FL", "Updat weights for batch %d (batch size: %d)...", requestData["batch"], requestData["batch_size"]);
     // TODO: Weights updated confirmation
@@ -188,7 +194,7 @@ String Fl::updateWeights(DynamicJsonDocument requestData) {
     int weights_count = requestData["weights"].size();
 
     for (int current = start; current < start + weights_count; current++) {
-        float weight = deScaleWeight(requestData["min"], requestData["max"], requestData["weights"][current]);
+        float weight = deScaleWeight(requestData["min"], requestData["max"], requestData["weights"][current], requestData["bit_width"]);
         if (current < network->getHiddenWeightsAmt()) hidden_weights[current] = weight;
         else output_weights[current - network->getHiddenWeightsAmt()] = weight;
     }

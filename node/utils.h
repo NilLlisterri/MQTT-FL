@@ -14,19 +14,19 @@ float readFloat() {
     return *(float *)&res;
 }
 
-void getScaleRange(float &a, float &b) {
+void getScaleRange(float &a, float &b, int bits) {
     a = 0;
-    b = std::pow(2, SCALED_WEIGHT_BITS)-1;
+    b = std::pow(2, bits)-1;
 } 
 
-scaledType scaleWeight(float min_w, float max_w, float weight) {
+int scaleWeight(float min_w, float max_w, float weight, int bits) {
     float a, b;
-    getScaleRange(a, b);
+    getScaleRange(a, b, bits);
     return round(a + ( (weight-min_w)*(b-a) / (max_w-min_w) ));
 }
 
-float deScaleWeight(float min_w, float max_w, scaledType weight) {
+float deScaleWeight(float min_w, float max_w, int weight, int bits) {
     float a, b;
-    getScaleRange(a, b);
+    getScaleRange(a, b, bits);
     return min_w + ( (weight-a)*(max_w-min_w) / (b-a) );
 }

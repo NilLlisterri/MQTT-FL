@@ -350,6 +350,6 @@ class NodeManager:
         flServer.startFL()
         self.sendTestAllDevices() # Final accuracy
 
-        figname = f"plots/{len(self.devices)}-{HIDDEN_NODES}-{SCALED_WEIGHT_BITS}.png"
+        figname = f"plots/{len(self.devices)}-{HIDDEN_NODES}.png"
         plt.savefig(figname, format='png')
         print(f"Generated {figname}")

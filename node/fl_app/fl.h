@@ -47,4 +47,6 @@ private:
     Fl(): MessageService(FL_APP_PORT, "Fl") {
         commandService = flCommandService;
     };
+
+    int getBitWidth();
 };
