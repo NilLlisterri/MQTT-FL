@@ -90,6 +90,9 @@ class FLServer:
             print("[SERVER] Payload not found in data, this is an ERROR!")
             return
         payload = jsonMessage['data']
+        if not 'data' in payload:
+            print("[SERVER] Data not in payload!")
+            return
         client = payload['addrSrc']
         if client not in self.clients:
             self.addClient(client)
@@ -128,6 +131,7 @@ class FLServer:
                 "appPortSrc": FL_APP_PORT,
                 "addrDst": clientId,
                 "client_id": clientId,
+                "sent_at": round(time.time() * 1000) # Milliseconds
             }
         }
         message["data"].update(data)

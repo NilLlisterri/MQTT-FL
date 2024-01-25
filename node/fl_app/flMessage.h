@@ -16,15 +16,15 @@ class FlMessage: public DataMessageGeneric {
 public:
     static const int MAX_JSON_SIZE = 2048;
     FlCommand flCommand;
-    DynamicJsonDocument data = DynamicJsonDocument(MAX_JSON_SIZE);
+    String data;
 
     void serialize(JsonObject& doc) {
         // Call the base class serialize function
         ((DataMessageGeneric*) (this))->serialize(doc);
 
         // Add the derived class data to the JSON object
-        doc["flCommand"] = flCommand;
-        doc["data"] = this->data;
+        doc["flCommand"] = this->flCommand;
+        doc["data"] = this->getData();
     }
 
     void deserialize(JsonObject& doc) {
@@ -32,8 +32,15 @@ public:
         ((DataMessageGeneric*) (this))->deserialize(doc);
 
         // Add the derived class data to the JSON object
-        flCommand = doc["flCommand"];
-        data = doc["data"];
+        this->flCommand = doc["flCommand"];
+        String extraData = doc["data"];
+        this->data = extraData;
+    }
+
+    DynamicJsonDocument getData() {
+        DynamicJsonDocument doc = DynamicJsonDocument(MAX_JSON_SIZE);
+        deserializeJson(doc, this->data);
+        return doc;
     }
 };
 #pragma pack()

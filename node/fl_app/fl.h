@@ -48,5 +48,5 @@ private:
         commandService = flCommandService;
     };
 
-    int getBitWidth();
+    int getBitWidth(int rtt);
 };

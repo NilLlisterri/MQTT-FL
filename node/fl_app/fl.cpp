@@ -133,8 +133,11 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
     ESP_LOGI("FL", "Sending weights for batch %d (batch size: %d)...", requestData["batch"], requestData["batch_size"]);
     FlMessage* message = getFlMessage(FlCommand::SendWeights, 1);
 
-    message->data["batch"] = requestData["batch"];
-    JsonArray weights = message->data.createNestedArray("weights");
+    DynamicJsonDocument data = DynamicJsonDocument(1024);
+
+    data["batch"] = requestData["batch"];
+    JsonArray weights = data.createNestedArray("weights");
+
     
     if (weights.isNull()) {
         ESP_LOGE("FL", "Could not create the weights nested array");
@@ -156,11 +159,15 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
         if (max < output_weights[i]) max = output_weights[i];
     }
 
-    message->data["min"] = min;
-    message->data["max"] = max;
+    data["min"] = min;
+    data["max"] = max;
 
-    int bit_width = this->getBitWidth();
-    message->data["bit_width"] = bit_width;
+    int sent_at = data["sent_at"];
+    // TODO: Calculate RTT
+    int rtt = 0;
+
+    int bit_width = this->getBitWidth(rtt);
+    data["bit_width"] = bit_width;
 
     int start = int(requestData["batch"]) * int(requestData["batch_size"]);
     for (int current = start; current - start < requestData["batch_size"]; current++) {
@@ -174,19 +181,21 @@ String Fl::sendWeights(DynamicJsonDocument requestData) {
         }
     }
 
+
+    serializeJson(data, message->data);
+
     MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
     delete message;
 
     return "Fl wait";
 }
 
-int Fl::getBitWidth() {
+int Fl::getBitWidth(int rtt) {
     return SCALED_WEIGHT_BITS;
 }
 
 String Fl::updateWeights(DynamicJsonDocument requestData) {
     ESP_LOGI("FL", "Updat weights for batch %d (batch size: %d)...", requestData["batch"], requestData["batch_size"]);
-    // TODO: Weights updated confirmation
 
     float* hidden_weights = network->get_HiddenWeights();
     float* output_weights = network->get_OutputWeights();
@@ -205,29 +214,23 @@ String Fl::updateWeights(DynamicJsonDocument requestData) {
 String Fl::sendStatus() {
     ESP_LOGI("FL", "Sending status...");
     FlMessage* message = getFlMessage(FlCommand::SendStatus, 1);
-
-    message->data["epochs"] = this->num_epochs;
+    message->data = "{\"epochs\": " + String(this->num_epochs) +"}";
     MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
     delete message;
     return "Fl wait";
 }
 
 String Fl::flGetWeights(FlMessage* flMessage) {
-    // if (dst == LoraMesher::getInstance().getLocalAddress())
-    // int batch = flMessage->data["batch"];
-    sendWeights(flMessage->data);
+    sendWeights(flMessage->getData());
     return "Fl wait";
 }
 
 String Fl::flUpdateWeights(FlMessage* flMessage) {
-    // if (dst == LoraMesher::getInstance().getLocalAddress())
-    // int batch = flMessage->data["batch"];
-    updateWeights(flMessage->data);
+    updateWeights(flMessage->getData());
     return "Fl wait";
 }
 
 String Fl::flGetStatus(FlMessage* flMessage) {
-    // if (dst == LoraMesher::getInstance().getLocalAddress())
     return sendStatus();
     return "Fl wait";
 }
@@ -256,6 +259,7 @@ FlMessage* Fl::getFlMessage(FlCommand command, uint16_t dst) {
 
 void Fl::processReceivedMessage(messagePort port, DataMessage* message) {
     FlMessage* flMessage = (FlMessage*) message;
+
     ESP_LOGV("FL", "Message received, command: %d", flMessage->flCommand);
     switch (flMessage->flCommand) {
         case FlCommand::GetWeights:
