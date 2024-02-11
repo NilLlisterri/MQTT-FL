@@ -131,7 +131,7 @@ void Fl::receiveSampleAndTrain() {
 // start of commands for FL
 String Fl::sendWeights(DynamicJsonDocument requestData) {
     ESP_LOGI("FL", "Sending weights for batch %d (batch size: %d)...", requestData["batch"], requestData["batch_size"]);
-    FlMessage* message = getFlMessage(FlCommand::SendWeights, 1);
+    FlMessage* message = getFlMessage(FlCommand::SendWeights, 0);
 
     DynamicJsonDocument data = DynamicJsonDocument(1024);
 
@@ -213,7 +213,7 @@ String Fl::updateWeights(DynamicJsonDocument requestData) {
 
 String Fl::sendStatus() {
     ESP_LOGI("FL", "Sending status...");
-    FlMessage* message = getFlMessage(FlCommand::SendStatus, 1);
+    FlMessage* message = getFlMessage(FlCommand::SendStatus, 0);
     message->data = "{\"epochs\": " + String(this->num_epochs) +"}";
     MessageManager::getInstance().sendMessage(messagePort::MqttPort, (DataMessage*) message);
     delete message;
@@ -249,7 +249,7 @@ FlMessage* Fl::getFlMessage(FlCommand command, uint16_t dst) {
     flMessage->flCommand = command;
 
     flMessage->appPortSrc = static_cast<appPort>((uint8_t) FL_APP_PORT);
-    flMessage->appPortDst = static_cast<appPort>((uint8_t) FL_APP_PORT);
+    flMessage->appPortDst = appPort::MQTTApp;
 
     flMessage->addrSrc = LoraMesher::getInstance().getLocalAddress();
     flMessage->addrDst = dst;
